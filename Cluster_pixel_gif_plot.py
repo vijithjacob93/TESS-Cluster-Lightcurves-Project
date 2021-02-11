@@ -26,9 +26,11 @@ def get_LCs(CLUSTERS,phot_type):
     frame = tpfs[0].shape[0]//2
     # obtain the aperture and the background masks with help of cluster radius and percentile (85%)
     if phot_type == 'pixel':
-        radius_mask[0],sky_mask[0] = circle_aperture(tpfs[0][frame].flux,tpfs[0][frame].flux,                Complete_Clusters[Complete_Clusters['NAME'] == CLUSTERS[0]]['CORE_RADIUS'].values[0],85)
+        radius_mask[0],sky_mask[0] = circle_aperture(tpfs[0][frame].flux,tpfs[0][frame].flux, \
+						     Complete_Clusters[Complete_Clusters['NAME'] == CLUSTERS[0]]['CORE_RADIUS'].values[0],85)
     elif phot_type == 'ensemble': 
-        star_mask[0],sky_mask[0] = circle_aperture(tpfs[0][frame].flux,tpfs[0][frame].flux,            Complete_Clusters[Complete_Clusters['NAME'] == CLUSTERS[0]]['CORE_RADIUS'].values[0],85)
+        star_mask[0],sky_mask[0] = circle_aperture(tpfs[0][frame].flux,tpfs[0][frame].flux, \
+						   Complete_Clusters[Complete_Clusters['NAME'] == CLUSTERS[0]]['CORE_RADIUS'].values[0],85)
 
     # if pixel photometry, iterate over each pixel in the radius mask and download LCs
     if phot_type == 'pixel':
@@ -52,7 +54,7 @@ def get_LCs(CLUSTERS,phot_type):
             #polyomial correction. to remove long period systematic trends that survived the PCA correction
             correctedLCs_poly,poly_terms = polynomial_correction(correctedLCs[0])
             #save the pixel corrected LCs
-            correctedLCs_poly.to_csv(CLUSTERS[0]+' pixels/corrected_LCs_CORE_RADIUS_pixel_no.{0}'.format(pixel_loc))
+            correctedLCs_poly.to_csv(CLUSTERS[0]+' pixels/core_pixels/corrected_LCs_CORE_RADIUS_pixel_no.{0}'.format(pixel_loc))
 
     # is ensemble photometry, download LC for entire aperture
     elif phot_type == 'ensemble':
@@ -84,8 +86,14 @@ def polynomial_correction(correctedLCs):
     poly_terms = np.zeros([len(start_times),3])
     correctedLCs_poly = correctedLCs.copy()
     for i in range(len(start_times)):
-        poly_terms[i] = np.polyfit(correctedLCs[np.logical_and.reduce([correctedLCs.time>start_times[i],            correctedLCs.time<end_times[i],correctedLCs.quality == 0])].time,                   correctedLCs[np.logical_and.reduce([correctedLCs.time>start_times[i],            correctedLCs.time<end_times[i],correctedLCs.quality == 0])].flux,deg=2)
-        correctedLCs_poly.flux[np.logical_and(correctedLCs.time>start_times[i],correctedLCs.time<end_times[i])]            =correctedLCs_poly[np.logical_and(correctedLCs.time>start_times[i],                                              correctedLCs.time<end_times[i])].flux            -np.polyval(poly_terms[i],correctedLCs_poly[np.logical_and(correctedLCs.time>start_times[i],                                                                       correctedLCs.time<end_times[i])].time)
+        poly_terms[i] = np.polyfit(correctedLCs[np.logical_and.reduce([correctedLCs.time>start_times[i], \
+				correctedLCs.time<end_times[i],correctedLCs.quality == 0])].time, \
+				   correctedLCs[np.logical_and.reduce([correctedLCs.time>start_times[i], \
+					correctedLCs.time<end_times[i],correctedLCs.quality == 0])].flux,deg=2)
+        correctedLCs_poly.flux[np.logical_and(correctedLCs.time>start_times[i],correctedLCs.time<end_times[i])] = \
+			correctedLCs_poly[np.logical_and(correctedLCs.time>start_times[i], \
+				correctedLCs.time<end_times[i])].flux-np.polyval(poly_terms[i],\
+					correctedLCs_poly[np.logical_and(correctedLCs.time>start_times[i], correctedLCs.time<end_times[i])].time)
     return correctedLCs_poly,poly_terms
 
 def degs_to_pixels(degs):
@@ -160,7 +168,7 @@ def circle_aperture(data,bkg,radius,PERCENTILE):
 ## START HERE ##
 
 #Read and process the Kharchenko catalog which contains info about clusters
-Complete_Clusters=Table.read('../../../Documents/Data_Files/Cluster_Catalog_Kharchenko_updated.fits')
+Complete_Clusters=Table.read(data_dir+'Cluster_Catalog_Kharchenko_updated.fits')
 Complete_Clusters=Complete_Clusters.to_pandas()
 Complete_Clusters['CLUSTER_RADIUS']=Complete_Clusters['CLUSTER_RADIUS']
 for i in range(len(Complete_Clusters)):
@@ -182,7 +190,7 @@ print("{0} has {1} result{2}.".format(CLUSTERS, len(search), char))
 tpfs = search.download_all(cutout_size=cutout_size)# download target pixel file for corresponding cluster
 
 sectors = [this_tpfs.sector for this_tpfs in tpfs] #sectors cluster was observed in
-orbit_times = pd.read_csv('orbit_times_20201013_1338.csv', comment = '#')# read the file containing epoch info of the sectors
+orbit_times = pd.read_csv(data_dir+'orbit_times_20201013_1338.csv', comment = '#')# read the file containing epoch info of the sectors
 start_times = orbit_times[orbit_times['Sector'].isin(sectors)]['Start TJD'].values # start times for the sectors that this cluster was observed in
 end_times = orbit_times[orbit_times['Sector'].isin(sectors)]['End TJD'].values # end times for the sectors
 
@@ -202,7 +210,7 @@ omega=np.arange(0.05,11,0.01)
 radius_mask=np.empty([len(tpfs),cutout_size,cutout_size],dtype='bool')
 
 #check if LCs have already been downloaded, corrected, and saved. if not, do it
-if len(glob.glob(CLUSTERS[0]+' pixels/core_pixels'))==0:
+if len(glob.glob(data_dir+CLUSTERS[0]+' pixels/core_pixels'))==0:
     get_LCs(CLUSTERS,'pixel')
     
 #define the radius mask based on the cluster radius
@@ -214,8 +222,8 @@ for i in range(len(np.where(radius_mask[0])[0])):
 	# the pixel locations
     pixel_loc=np.where(radius_mask[0])[0][i],np.where(radius_mask[0])[1][i]
 
-	#read in the corrected LCs of individual pixels
-    correctedLCs_poly = pd.read_csv(CLUSTERS[0]+' pixels/core_pixels/'
+    #read in the corrected LCs of individual pixels
+    correctedLCs_poly = pd.read_csv(data_dir+CLUSTERS[0]+' pixels/core_pixels/'
                                     'corrected_LCs_CENTRAL_RADIUS_pixel_no.{0}'.format(pixel_loc),index_col=0)
     t = correctedLCs_poly['time']
     dy = correctedLCs_poly['flux_err']
@@ -275,14 +283,14 @@ for freq_index in range(len(freq_bin_centers)-1):#iterate over the frequency ran
     ax3.set_title('Lomb-Scargle periodogram for {0}'.format(CLUSTERS[0]))
 
     fig.suptitle('Pixels for {0}: gif plots (freq={1})'.format(CLUSTERS[0],round(freq_bin_centers[freq_index],2)))
-#     fig.savefig('pixel gif plots/Pixels_for_{0}:_gif_plots_(freq={1}).png'.format(CLUSTERS[0],round(freq_bin_centers[freq_index],2)))# save those plots
+#     fig.savefig(data_dir+'pixel gif plots/Pixels_for_{0}:_gif_plots_(freq={1}).png'.format(CLUSTERS[0],round(freq_bin_centers[freq_index],2)))# save those plots
     fig.show()
 
 ## Make the gif using the individual plots ##
 
 # set the gif destination path and the path to find the frames in
-gif_path = "pixel gif plots/{0}/pixel_power.gif"
-frames_path = "pixel gif plots/{0}/Pixels_for_{0}:_gif_plots_(freq={1}).png"
+gif_path = data_dir+"pixel gif plots/{0}/pixel_power.gif"
+frames_path = data_dir+"pixel gif plots/{0}/Pixels_for_{0}:_gif_plots_(freq={1}).png"
 with imageio.get_writer(gif_path.format(CLUSTERS[0]), mode='I',fps=1) as writer:# open gif writer
     for freq_index in range(len(freq_bin_centers)-1):# iterate over the frequencies
         writer.append_data(imageio.imread(frames_path.format(CLUSTERS[0],round(freq_bin_centers[freq_index],2))))#write the gif
